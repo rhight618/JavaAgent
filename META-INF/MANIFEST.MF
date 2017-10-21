@@ -1,6 +1,11 @@
 Manifest-Version: 1.0
 Premain-Class: com.cs.agent.Agent
+Built-By: Ryan
 Can-Redefine-Classes: true
 Can-Retransform-Classes: true
+Created-By: Apache Maven 3.3.9
+Build-Jdk: 1.8.0_91
+Main-Class: Main
+
 
 

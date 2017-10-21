@@ -2,24 +2,17 @@ package com.cs.agent;
 import java.lang.instrument.ClassFileTransformer;
 import java.lang.instrument.IllegalClassFormatException;
 import java.security.ProtectionDomain;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
 
 import javassist.ByteArrayClassPath;
+import javassist.CannotCompileException;
 import javassist.ClassPool;
 import javassist.CtClass;
 import javassist.CtMethod;
-import javassist.bytecode.AnnotationsAttribute;
-import javassist.bytecode.MethodInfo;
-import javassist.bytecode.annotation.Annotation;
-import javassist.bytecode.annotation.ArrayMemberValue;
-import javassist.bytecode.annotation.MemberValue;
-import javassist.bytecode.annotation.StringMemberValue;
+import javassist.expr.ExprEditor;
+import javassist.expr.FieldAccess;
+import javassist.expr.MethodCall;
 
 public class ImportantLogClassTransformer implements ClassFileTransformer {
-	private static final String METHOD_ANNOTATION = "com.example.spring2gx.mains.ImportantLog";
-	private static final String ANNOTATION_ARRAY = "fields";
 	private ClassPool pool;
 
 	public ImportantLogClassTransformer() {
@@ -30,19 +23,35 @@ public class ImportantLogClassTransformer implements ClassFileTransformer {
 			ProtectionDomain protectionDomain, byte[] classfileBuffer) throws IllegalClassFormatException {
 		try {
 			
-			if (!className.contains("com/cs/assignment2")){
+			if (!className.contains("com/cs/assignment/main")){
 				return null;
 			}
+			
 			
 			pool.insertClassPath(new ByteArrayClassPath(className, classfileBuffer));
 			CtClass cclass = pool.get(className.replaceAll("/", "."));
 			if (!cclass.isFrozen()) {
 				for (CtMethod currentMethod : cclass.getDeclaredMethods()) {
-					//Annotation annotation = getAnnotation(currentMethod);
-					//if (annotation != null) {
-					//	List<String> parameterIndexes = getParamIndexes(annotation);
-						currentMethod.insertBefore(createJavaString(currentMethod, className, null));
-					//}
+				
+					currentMethod.instrument(
+						    new ExprEditor() {
+						        public void edit(MethodCall m)
+						                      throws CannotCompileException
+						        {
+						        	m.replace("{ System.out.println(\"Class: " + className + "-> Method Name: " + m.getMethodName() + " at Line Number: " + m.getLineNumber() + "\"); $_ = $proceed($$); }");
+
+						        }
+						        
+						        public void edit(FieldAccess f)
+					                      throws CannotCompileException
+						        {
+						        	
+						        	f.replace("{ System.out.println(\"Class: " + className + "-> Field Access Name: " + f.getFieldName() + " at Line Number: " + f.getLineNumber() + "\"); $_ = $proceed($$); }");
+
+						        }
+						        
+						        
+						    });
 				}
 				return cclass.toBytecode();
 			}
@@ -52,60 +61,4 @@ public class ImportantLogClassTransformer implements ClassFileTransformer {
 		return null;
 	}
 
-	private Annotation getAnnotation(CtMethod method) {
-		MethodInfo mInfo = method.getMethodInfo();
-		// the attribute we are looking for is a runtime invisible attribute
-		// use Retention(RetentionPolicy.RUNTIME) on the annotation to make it
-		// visible at runtime
-		AnnotationsAttribute attInfo = (AnnotationsAttribute) mInfo.getAttribute(AnnotationsAttribute.invisibleTag);
-		if (attInfo != null) {
-			// this is the type name meaning use dots instead of slashes
-			return attInfo.getAnnotation(METHOD_ANNOTATION);
-		}
-		return null;
-	}
-
-	private List<String> getParamIndexes(Annotation annotation) {
-		ArrayMemberValue fields = (ArrayMemberValue) annotation.getMemberValue(ANNOTATION_ARRAY);
-		if (fields != null) {
-			MemberValue[] values = (MemberValue[]) fields.getValue();
-			List<String> parameterIndexes = new ArrayList<String>();
-			for (MemberValue val : values) {
-				parameterIndexes.add(((StringMemberValue) val).getValue());
-			}
-			return parameterIndexes;
-		}
-		return Collections.emptyList();
-	}
-
-	private String createJavaString(CtMethod currentMethod, String className, List <String> indexParameters) {
-		StringBuilder sb = new StringBuilder();
-		sb.append("{StringBuilder sb = new StringBuilder");
-		sb.append("(\"A call was made to method '\");");
-		sb.append("sb.append(\"");
-		sb.append(currentMethod.getName());
-		sb.append("\");sb.append(\"' on class '\");");
-		sb.append("sb.append(\"");
-		sb.append(className);
-		sb.append("\");sb.append(\"'.\");");
-		sb.append("sb.append(\"\\n    Important params:\");");
-		if (indexParameters != null){
-			for (String index : indexParameters) {
-				try {
-					// add one because 0 is "this" for instance variable
-					// if were a static method 0 would not be anything
-					int localVar = Integer.parseInt(index) + 1;
-					sb.append("sb.append(\"\\n        Index \");");
-					sb.append("sb.append(\"");
-					sb.append(index);
-					sb.append("\");sb.append(\" value: \");");
-					sb.append("sb.append($" + localVar + ");");
-				} catch (NumberFormatException e) {
-					e.printStackTrace();
-				}
-			}
-		}
-		sb.append("System.out.println(sb.toString());}");
-		return sb.toString();
-	}
 }
